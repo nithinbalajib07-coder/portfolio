@@ -1,0 +1,10 @@
+# Antigravity & Agent directories
+.agent/
+.gemini/
+.opencode/
+
+# OS and temporary files
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
