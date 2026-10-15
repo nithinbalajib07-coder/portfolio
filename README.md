@@ -28,7 +28,7 @@ An interactive, high-craft creative developer portfolio crafted for **Nithin Bal
 - **🚀 Featured Engineering Projects (Redirection-Ready):**
   - **CNN Brain Tumor Detection & Segmentation:** Deep convolutional neural network system for automated radiological MRI scan screening and tumor lesion segmentation. Combines high-sensitivity classification with pixel-level mask prediction, probability gradient heatmaps, and CUDA GPU acceleration ([Kaggle Notebook](https://www.kaggle.com/code/nithinbalajib/md-project-2025-2026) · `project-brain-tumor.png`).
   - **C/C++ Code Complexity Analyser:** Automated static analysis engine and code visualization workbench for C & C++ codebases. Constructs Abstract Syntax Trees (AST) and Control Flow Graphs (CFG) to measure McCabe cyclomatic complexity, Halstead software metrics, and nested function depth bottlenecks ([GitHub Repository](https://github.com/nithinbalajib07-coder/C-C-Code-Complexity-Analyser) · `project-cpp-complexity.jpg`).
-  - **Interactive Tactile Cards:** Full-card clickability, external link chips, hover elevation, and smooth custom cursor tracking.
+  - **Interactive Tactile Cards:** Full-card clickability with dedicated sleek arrow redirection button, hover elevation, and smooth custom cursor tracking.
 
 - **⚡ Verified Technical Skills & Engineering Foundations:**
   - **Skills Learnt:** Python, C / C++.

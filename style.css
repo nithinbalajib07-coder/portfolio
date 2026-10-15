@@ -1298,11 +1298,8 @@ section:hover {
 
 #project-card-tumor:hover .project-title-arrow {
     background: var(--neon-red);
+    border-color: var(--neon-red);
     color: #FFFFFF;
-}
-
-#project-card-tumor:hover .project-cta-link {
-    color: var(--crimson-deep);
 }
 
 /* Image Box & Badges */
@@ -1589,7 +1586,8 @@ section:hover {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 22px;
+    margin-top: auto;
+    margin-bottom: 0;
 }
 
 .project-tech-tag {
