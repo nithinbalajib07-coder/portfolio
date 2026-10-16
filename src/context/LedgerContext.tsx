@@ -84,7 +84,7 @@ export function getMasterAudioDestination(ctx: AudioContext): AudioNode {
       comp.release.setValueAtTime(0.15, ctx.currentTime);
 
       const master = ctx.createGain();
-      master.gain.setValueAtTime(2.2, ctx.currentTime); // High-gain master volume boost
+      master.gain.setValueAtTime(1.75, ctx.currentTime); // Master volume adjusted slightly lower for balanced loudness
 
       comp.connect(master);
       master.connect(ctx.destination);
@@ -302,7 +302,7 @@ function playExclusiveTrack(
   getAudioEl: () => HTMLAudioElement | null,
   url: string,
   durationSec: number = 2.8,
-  volume: number = 2.4,
+  volume: number = 2.0,
   fallbackProcedural?: () => void
 ) {
   // 1. Instantly stop any previous audio
@@ -357,7 +357,7 @@ function playExclusiveTrack(
       }
       const sound = (el.cloneNode(true) as HTMLAudioElement) || el;
       sound.currentTime = 0;
-      sound.volume = 1.0;
+      sound.volume = 0.85;
       activeAudioElement = sound;
 
       const playPromise = sound.play();
@@ -661,14 +661,14 @@ function createProceduralAudio() {
         lowOsc.stop(now + 0.08);
       });
     },
-    // Volcanic explosion audio boosted to high volume with reliable procedural fallback
+    // Volcanic explosion audio with reliable procedural fallback
     volcano: () => {
       playExclusiveTrack(
         () => volcanoAudioBuffer,
         () => volcanoAudioEl,
         '/volcano_eruption.mp4',
         2.8,
-        2.4,
+        2.0,
         playProceduralCalderaExplosion
       );
     },
@@ -692,7 +692,7 @@ function createProceduralAudio() {
 
         // Master gain for waterfall
         const waterfallMaster = ctx.createGain();
-        waterfallMaster.gain.setValueAtTime(2.2, now);
+        waterfallMaster.gain.setValueAtTime(1.8, now);
 
         // 1. Deep rushing hydraulic body
         const lowFilter = ctx.createBiquadFilter();
@@ -758,25 +758,25 @@ function createProceduralAudio() {
         noise.stop(now + dur);
       });
     },
-    // Howling mountain wind blowing sound boosted to high volume with procedural fallback
+    // Howling mountain wind blowing sound with procedural fallback
     wind: () => {
       playExclusiveTrack(
         () => windAudioBuffer,
         () => windAudioEl,
         '/wind_blowing.wav',
         2.8,
-        2.4,
+        2.0,
         playProceduralMountainWind
       );
     },
-    // Birds chirping sound boosted to high volume with procedural fallback
+    // Birds chirping sound with procedural fallback
     birds: () => {
       playExclusiveTrack(
         () => birdAudioBuffer,
         () => birdAudioEl,
         '/forest_bird_chirp.wav',
         2.8,
-        2.5,
+        2.1,
         playProceduralForestBirds
       );
     },

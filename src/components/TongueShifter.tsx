@@ -216,7 +216,7 @@ export const TongueShifter: React.FC = () => {
         window.speechSynthesis.cancel();
         window.speechSynthesis.resume();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.volume = 1.0;
+        utterance.volume = 0.85;
         (window as unknown as { _curUtterance?: SpeechSynthesisUtterance })._curUtterance = utterance;
         if (currentDomain === 'emberhold') {
           utterance.pitch = 0.72;
