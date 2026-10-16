@@ -103,16 +103,20 @@ export function playSafeSound(playFn: (ctx: AudioContext, now: number, dest: Aud
   const ctx = getSharedAudioContext();
   if (!ctx) return;
 
-  if (ctx.state === 'suspended') {
-    ctx.resume().catch(() => {});
-  }
+  const run = () => {
+    try {
+      const now = ctx.currentTime + 0.01;
+      const dest = getMasterAudioDestination(ctx);
+      playFn(ctx, now, dest);
+    } catch (e) {
+      console.warn('Procedural audio execution error', e);
+    }
+  };
 
-  try {
-    const now = ctx.currentTime + 0.01;
-    const dest = getMasterAudioDestination(ctx);
-    playFn(ctx, now, dest);
-  } catch (e) {
-    console.warn('Procedural audio execution error', e);
+  if (ctx.state === 'suspended') {
+    ctx.resume().then(run).catch(run);
+  } else {
+    run();
   }
 }
 

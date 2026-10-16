@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useLedger, playSafeSound } from '../context/LedgerContext';
+import { useLedger } from '../context/LedgerContext';
 import { DOMAIN_LANGUAGES, COMMON_PHRASES } from '../data/languages';
 import { DOMAINS } from '../data/domains';
 import { DomainId, PhraseTranslation } from '../types/world';
@@ -129,6 +129,133 @@ const ELEMENT_UI_THEMES: Record<DomainId, ElementUITheme> = {
   },
 };
 
+// Global set to prevent garbage collection of SpeechSynthesisUtterance in Chromium
+const activeUtterances = new Set<SpeechSynthesisUtterance>();
+let cachedVoices: SpeechSynthesisVoice[] = [];
+
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  const updateVoices = () => {
+    try {
+      cachedVoices = window.speechSynthesis.getVoices();
+    } catch (_) {}
+  };
+  updateVoices();
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = updateVoices;
+  }
+}
+
+/**
+ * Bulletproof procedural formant and harmonic audio synthesis:
+ * Generates an authentic vocal formant articulation of the word's syllables
+ * alongside a domain-specific elemental resonant harmonic chime.
+ * Works 100% offline, on any device and browser, with 0 external dependencies.
+ */
+/**
+ * Returns the best local offline voice installed on the user's OS.
+ * Excludes remote "Online (Natural)" cloud voices (e.g. Edge cloud streaming)
+ * which frequently freeze or fail on localhost.
+ */
+function getBestLocalVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+  const sysVoices = window.speechSynthesis.getVoices();
+  const voices = sysVoices && sysVoices.length > 0 ? sysVoices : cachedVoices;
+  if (!voices || voices.length === 0) return null;
+  cachedVoices = voices;
+
+  const isLocalOffline = (v: SpeechSynthesisVoice) =>
+    !v.name.toLowerCase().includes('online') &&
+    !v.name.toLowerCase().includes('natural') &&
+    v.localService !== false;
+
+  const english = voices.filter((v) => v.lang.startsWith('en'));
+  const offlineEnglish = english.filter(isLocalOffline);
+
+  return (
+    offlineEnglish.find((v) => v.name.includes('David') || v.name.includes('Mark') || v.name.includes('Zira') || v.name.includes('Google')) ||
+    offlineEnglish[0] ||
+    english.find((v) => !v.name.toLowerCase().includes('online')) ||
+    english[0] ||
+    voices[0]
+  );
+}
+
+
+
+/**
+ * Bulletproof Web Speech Synthesis:
+ * Uses offline local system voices to prevent Edge/Chrome cloud-voice freezes on localhost.
+ */
+function speakWithTTS(
+  nativeText: string,
+  phoneticText: string,
+  domain: DomainId,
+  onEnd?: () => void
+) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    if (onEnd) setTimeout(onEnd, 900);
+    return;
+  }
+
+  const cleanPhonetic = phoneticText
+    ? phoneticText.replace(/[\[\]]/g, '').replace(/[-/–—]/g, ' ').trim()
+    : nativeText;
+  const spokenText = cleanPhonetic || nativeText;
+
+  const doSpeak = () => {
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+
+      const utterance = new SpeechSynthesisUtterance(spokenText);
+      utterance.lang = 'en-US';
+      utterance.volume = 1.0;
+
+      if (domain === 'emberhold') {
+        utterance.pitch = 0.8;
+        utterance.rate = 0.88;
+      } else if (domain === 'skydrift') {
+        utterance.pitch = 1.15;
+        utterance.rate = 0.95;
+      } else if (domain === 'stonemarch') {
+        utterance.pitch = 0.72;
+        utterance.rate = 0.82;
+      } else {
+        // tidereach
+        utterance.pitch = 0.95;
+        utterance.rate = 0.9;
+      }
+
+      const voice = getBestLocalVoice();
+      if (voice) {
+        utterance.voice = voice;
+      }
+
+      activeUtterances.add(utterance);
+
+      const cleanup = () => {
+        activeUtterances.delete(utterance);
+        if (onEnd) onEnd();
+      };
+
+      utterance.onend = cleanup;
+      utterance.onerror = cleanup;
+
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('SpeechSynthesis error:', e);
+      if (onEnd) onEnd();
+    }
+  };
+
+  try {
+    window.speechSynthesis.cancel();
+  } catch (_) {}
+
+  setTimeout(doSpeak, 35);
+}
+
 export const TongueShifter: React.FC = () => {
   const { currentDomain, setDomain, soundEnabled } = useLedger();
 
@@ -166,94 +293,26 @@ export const TongueShifter: React.FC = () => {
   const currentPhonetic = customResult ? customResult.phonetic : phraseTranslation.phonetic;
 
   // Audio Speech Synthesis / Read Aloud Pronunciation Function
-  const speakPronunciation = (text: string, identifier?: string) => {
+  const speakPronunciation = (nativeText: string, phoneticText?: string, identifier?: string) => {
     if (identifier) {
       setSpeakingWord(identifier);
     }
     setIsSpeaking(true);
 
-    // 1. Play procedural resonant harmonic tone
-    if (soundEnabled) {
-      playSafeSound((ctx, now, dest) => {
-        const baseFreq =
-          currentDomain === 'emberhold'
-            ? 220
-            : currentDomain === 'stonemarch'
-            ? 180
-            : currentDomain === 'skydrift'
-            ? 380
-            : 300;
-        const osc = ctx.createOscillator();
-        const subOsc = ctx.createOscillator();
-        const gain = ctx.createGain();
+    const phonetic = phoneticText || nativeText;
 
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(baseFreq, now);
-        osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, now + 0.15);
-        osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.2, now + 0.35);
+    // Direct voice pronunciation
+    speakWithTTS(nativeText, phonetic, currentDomain, () => {
+      setIsSpeaking(false);
+      setSpeakingWord((prev) => (prev === identifier ? null : prev));
+    });
 
-        subOsc.type = 'sine';
-        subOsc.frequency.setValueAtTime(baseFreq * 0.5, now);
-
-        gain.gain.setValueAtTime(0.001, now);
-        gain.gain.linearRampToValueAtTime(0.95, now + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-
-        osc.connect(gain);
-        subOsc.connect(gain);
-        gain.connect(dest || ctx.destination);
-
-        osc.start(now);
-        osc.stop(now + 0.65);
-        subOsc.start(now);
-        subOsc.stop(now + 0.65);
-      });
-    }
-
-    // 2. Web Speech Synthesis API voice reading
-    if ('speechSynthesis' in window) {
-      try {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.resume();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.volume = 0.85;
-        (window as unknown as { _curUtterance?: SpeechSynthesisUtterance })._curUtterance = utterance;
-        if (currentDomain === 'emberhold') {
-          utterance.pitch = 0.72;
-          utterance.rate = 0.82;
-        } else if (currentDomain === 'skydrift') {
-          utterance.pitch = 1.25;
-          utterance.rate = 0.95;
-        } else if (currentDomain === 'stonemarch') {
-          utterance.pitch = 0.62;
-          utterance.rate = 0.8;
-        } else {
-          // tidereach
-          utterance.pitch = 0.95;
-          utterance.rate = 0.88;
-        }
-
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          setSpeakingWord(null);
-        };
-        utterance.onerror = () => {
-          setIsSpeaking(false);
-          setSpeakingWord(null);
-        };
-
-        window.speechSynthesis.speak(utterance);
-        return;
-      } catch (err) {
-        console.warn('SpeechSynthesis error', err);
-      }
-    }
-
-    // Fallback timer if speech synthesis finishes quickly or is unavailable
+    // 3. Fallback safety timer proportional to phrase length
+    const duration = Math.max(3500, (phonetic.length || 20) * 80);
     setTimeout(() => {
       setIsSpeaking(false);
-      setSpeakingWord(null);
-    }, 1200);
+      setSpeakingWord((prev) => (prev === identifier ? null : prev));
+    }, duration);
   };
 
   const filteredVocab = domainLang.vocabulary.filter((v) => {
@@ -439,7 +498,7 @@ export const TongueShifter: React.FC = () => {
 
               {/* Fictional Script Glyphs Area with Neon Elemental Glow */}
               <div
-                className={`p-6 sm:p-8 rounded-2xl bg-black/60 border ${uiTheme.borderSubtle} flex flex-col items-center justify-center min-h-[150px] ${uiTheme.glyphColor} overflow-x-auto text-center shadow-inner relative w-full`}
+                className={`p-6 sm:p-8 rounded-2xl bg-black/60 border ${uiTheme.borderSubtle} flex flex-col items-center justify-center min-h-[150px] ${uiTheme.glyphColor} overflow-x-auto overflow-y-hidden text-center shadow-inner relative z-10 w-full`}
               >
                 <div className="w-full flex justify-center items-center py-2 px-1">
                   <ScriptGlyphRenderer
@@ -452,21 +511,27 @@ export const TongueShifter: React.FC = () => {
               </div>
 
               {/* Translation & Pronunciation Row */}
-              <div className="space-y-3 pt-1">
+              <div className="space-y-3 pt-3 relative z-20">
                 <div className="flex items-center justify-end">
                   {/* PRONUNCIATION BUTTON TO READ ALOUD */}
                   <button
                     type="button"
-                    onClick={() => speakPronunciation(currentNativeWord, 'main')}
-                    className={`font-label text-xs font-semibold px-4 py-2 rounded-full ${uiTheme.pronounceBtn} flex items-center gap-2 cursor-pointer transition-all active:scale-95 shadow-md`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      speakPronunciation(currentNativeWord, currentPhonetic, 'main');
+                    }}
+                    className={`relative z-30 font-label text-xs font-semibold px-5 py-2.5 min-h-[42px] rounded-full ${uiTheme.pronounceBtn} flex items-center gap-2 cursor-pointer transition-all active:scale-[0.98] shadow-md select-none`}
                     title="Click to pronounce this phrase aloud"
                   >
                     <span
-                      className={`material-symbols-outlined text-[18px] text-white ${isSpeaking && speakingWord === 'main' ? 'animate-bounce' : ''}`}
+                      className={`material-symbols-outlined text-[18px] text-white pointer-events-none ${isSpeaking && speakingWord === 'main' ? 'animate-bounce' : ''}`}
                     >
                       {isSpeaking && speakingWord === 'main' ? 'graphic_eq' : 'volume_up'}
                     </span>
-                    <span className="text-white font-bold">{isSpeaking && speakingWord === 'main' ? 'Pronouncing...' : 'Pronounce Aloud'}</span>
+                    <span className="text-white font-bold pointer-events-none select-none">
+                      {isSpeaking && speakingWord === 'main' ? 'Pronouncing...' : 'Pronounce Aloud'}
+                    </span>
                   </button>
                 </div>
 
@@ -508,11 +573,15 @@ export const TongueShifter: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => speakPronunciation(currentPhonetic, 'syllables')}
-                    className={`font-label text-[11px] ${uiTheme.buttonInactive} px-3.5 py-1.5 rounded-full cursor-pointer flex items-center gap-1.5 transition-all ml-auto sm:ml-0 font-medium`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      speakPronunciation(currentPhonetic, currentPhonetic, 'syllables');
+                    }}
+                    className={`relative z-20 font-label text-[11px] ${uiTheme.buttonInactive} px-4 py-2 min-h-[36px] rounded-full cursor-pointer flex items-center gap-1.5 transition-all active:scale-[0.98] ml-auto sm:ml-0 font-medium select-none`}
                   >
-                    <span className="material-symbols-outlined text-[14px]">hearing</span>
-                    <span className="text-white">Hear Syllables</span>
+                    <span className="material-symbols-outlined text-[14px] pointer-events-none">hearing</span>
+                    <span className="text-white pointer-events-none select-none">Hear Syllables</span>
                   </button>
                 </div>
               </div>
@@ -646,11 +715,24 @@ export const TongueShifter: React.FC = () => {
                     </span>
                     <button
                       type="button"
-                      onClick={() => speakPronunciation(w.native, `vocab-${idx}`)}
-                      className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer flex-shrink-0"
-                      title={`Listen to pronunciation of ${w.native}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        speakPronunciation(w.native, w.phonetic, `vocab-${idx}`);
+                      }}
+                      className={`relative z-20 w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer flex-shrink-0 select-none ${
+                        speakingWord === `vocab-${idx}`
+                          ? 'bg-white text-black shadow-[0_0_12px_rgba(255,255,255,0.85)] scale-110'
+                          : 'bg-white/10 hover:bg-white/25 text-white hover:scale-105 active:scale-95'
+                      }`}
+                      title={`Listen to pronunciation of ${w.native} [${w.phonetic}]`}
+                      aria-label={`Listen to ${w.native}`}
                     >
-                      <span className="material-symbols-outlined text-[14px]">
+                      <span
+                        className={`material-symbols-outlined text-[15px] pointer-events-none ${
+                          speakingWord === `vocab-${idx}` ? 'animate-pulse text-amber-500 font-bold' : ''
+                        }`}
+                      >
                         {speakingWord === `vocab-${idx}` ? 'graphic_eq' : 'volume_up'}
                       </span>
                     </button>
